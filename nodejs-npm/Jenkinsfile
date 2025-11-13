@@ -1,0 +1,63 @@
+@Library('blackduck-logs-publisher') _
+
+pipeline {
+    agent { label 'mac-sh' }
+
+    stages {
+        stage("Build") {
+            steps {
+                script {
+                    echo "JOB_NAME: ${env.JOB_NAME}"
+
+                    dir('nodejs-npm') {
+                        sh 'node --version'
+                        sh 'npm --version'
+                        sh 'npm install'
+                    }
+                }
+            }
+        }
+
+        stage("polaris-detailed-workflow") {
+            when {
+                // Triggering Black Duck Security Scan on master branch or Pull Request
+                anyOf {
+                    branch 'main'
+                    branch pattern: "PR-\\d+", comparator: "REGEXP"
+                }
+            }
+            steps {
+                script {
+                    dir('nodejs-npm') {
+                        security_scan coverity_build_command: 'npm install', coverity_clean_command: 'npm cache clean --force', detect_args: '--detect.diagnostic=true', 
+                          detect_search_depth: 3, polaris_assessment_types: 'SAST,SCA', polaris_prComment_enabled: true, polaris_prComment_severities: 'CRITICAL,HIGH', 
+                          polaris_reports_sarif_create: true, polaris_reports_sarif_groupSCAIssues: true, polaris_reports_sarif_issue_types: 'SAST, SCA', 
+                          polaris_reports_sarif_severities: 'CRITICAL,HIGH', polaris_test_sast_location: 'hybrid', polaris_test_sca_location: 'hybrid', 
+                          polaris_waitForScan: true, product: 'polaris'
+
+                        
+                    }
+                    
+                   
+                }
+            }
+        }
+        
+
+      
+    }
+
+    post {
+        always {
+            pushJenkinsLogsToGitHub([
+                githubOrg: 'polaris-jenkins-samples',
+                repoName: 'detailed-example',
+                retentionCount: 5
+            ])
+        }
+    }
+}
+
+
+
+
